@@ -6,14 +6,14 @@
 FROM quay.io/devfile/base-developer-image:ubi9-9b60f86
 
 ENV MANDREL_VERSION=23.1.9.0-Final
-ENV MVN_VERSION=3.9.9
+ENV MVN_VERSION=3.9.12
 ENV GRAALVM_HOME="/usr/local/mandrel-java21-${MANDREL_VERSION}"
 ENV JAVA_HOME="/usr/local/mandrel-java21-${MANDREL_VERSION}"
 ENV PATH="/usr/local/maven/apache-maven-${MVN_VERSION}/bin:$JAVA_HOME/bin:${PATH}"
-ENV QUARKUS_VERSION=3.27.1.redhat-00003
-ENV QUARKUS_CLI_VERSION=3.27.1
+ENV QUARKUS_VERSION=3.27.2.redhat-00002
+ENV QUARKUS_CLI_VERSION=3.27.2
 ENV JBANG_DIR="/usr/local/jbang"
-ENV OC_VERSION=4.20.8
+ENV OC_VERSION=4.20.10
 
 USER root
 
@@ -34,20 +34,14 @@ RUN cp /tmp/quarkus-cli-${QUARKUS_CLI_VERSION}/bin/quarkus /usr/local/bin && cp 
 RUN chmod +x /usr/local/bin/quarkus && cd /usr/local/bin
 RUN mkdir -p ${JBANG_DIR} && curl -Ls https://sh.jbang.dev | bash -s - app setup
 RUN ln -s ${JBANG_DIR}/bin/jbang /usr/local/bin/jbang
-RUN chmod 777 ${JAVA_HOME}/lib/security/cacerts
+RUN chmod a+w ${JAVA_HOME}/lib/security/cacerts
+RUN mkdir -p /home/user/.m2 && chmod -R a+w /home/user/.m2 && chown -R user.user /home/user --silent
+RUN chmod -R a+rwx /home/user/.siege
 USER user
 
-RUN mkdir -p /home/user/.m2
 COPY settings.xml /home/user/.m2
 RUN cd /tmp && mkdir project && cd project && mvn com.redhat.quarkus.platform:quarkus-maven-plugin:${QUARKUS_VERSION}:create -DprojectGroupId=org.acme -DprojectArtifactId=footest -DplatformGroupId=com.redhat.quarkus.platform -DplatformVersion=${QUARKUS_VERSION} -Dextensions="quarkus-rest,quarkus-rest-jackson,quarkus-agroal,quarkus-jdbc-h2,quarkus-jdbc-postgresql,quarkus-kubernetes,quarkus-scheduler,quarkus-smallrye-fault-tolerance,quarkus-smallrye-health" && mvn -f footest clean compile package -DskipTests && cd / && rm -rf /tmp/project
 RUN cd /tmp && mkdir project && cd project && mvn com.redhat.quarkus.platform:quarkus-maven-plugin:${QUARKUS_VERSION}:create -DprojectGroupId=org.acme -DprojectArtifactId=footest -DplatformGroupId=com.redhat.quarkus.platform -DplatformVersion=${QUARKUS_VERSION} -Dextensions="quarkus-messaging-kafka,quarkus-vertx,quarkus-kafka-client,quarkus-micrometer-registry-prometheus,quarkus-smallrye-openapi,quarkus-rest-qute,quarkus-opentelemetry" && mvn -f footest clean compile package -Pnative -DskipTests && cd / && rm -rf /tmp/project
 RUN cd /tmp && git clone https://github.com/RedHat-Middleware-Workshops/quarkus-workshop-m3-labs && cd quarkus-workshop-m3-labs && git checkout rhbq-3.27 && for proj in *-petclinic* ; do mvn -fn -f ./$proj dependency:resolve-plugins dependency:resolve dependency:go-offline clean compile -DskipTests ; done && cd /tmp && rm -rf /tmp/quarkus-workshop-m3-labs
 RUN siege && sed -i 's/^connection = close/connection = keep-alive/' $HOME/.siege/siege.conf && sed -i 's/^benchmark = false/benchmark = true/' $HOME/.siege/siege.conf
 RUN echo '-w "\n"' > $HOME/.curlrc
-
-USER root
-RUN chown -R user /home/user/.m2
-RUN chmod -R a+w /home/user/.m2
-RUN chmod -R a+rwx /home/user/.siege
-
-USER user
